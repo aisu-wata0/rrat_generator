@@ -1,0 +1,4 @@
+curl --header "Content-Type: application/json" \
+  --request POST \
+  --data '{"context":"Anonymous", "top_p": 0.9, "top_k": 0.9, "temperature": 0.75}' \
+  http://localhost:5000/complete
