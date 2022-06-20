@@ -26,7 +26,7 @@ from tqdm import tqdm
 
 # aesthetic customization of the progressbar
 tqdm_kwargs = {
-    "smoothing": 0.0,
+    "smoothing": 0.05,
     "position": 0,
     "leave": True,
     "bar_format": "{r_bar} {l_bar}{bar}",
