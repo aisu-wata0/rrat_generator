@@ -140,12 +140,14 @@ board = "vt"
 base_url = f"https://archive.alice.al/{board}/"
 thread_blacklist = set({1})
 # %%
-page_num = 1
 soup_cache = {}
 items = {}
-items_new = {}
-break_when_no_new_items = False
+thread_images = {}
 
+# %%
+break_when_no_new_items = True
+items_new = {}
+page_num = 1
 try:
     while True:
         url = base_url + f"page/{urllib.parse.quote(str(page_num))}"
@@ -223,7 +225,7 @@ except FileNotFoundError:
 
 print(f"{num_lines} lines in file {json_threads_filename}")
 
-thread_images = {}
+items = {int(key): items[key] for key in sorted(items.keys(), key=int)}
 
 key_list = list(sorted(items.keys()))
 len(key_list)
@@ -231,17 +233,18 @@ len(key_list)
 write_thread = None
 
 pbar = tqdm(total=len(key_list), **tqdm_kwargs)
-
+prev_id = 0
 for item_id in key_list:
     try:
         item_id = int(item_id)
         if (
-            item_id in items and items[item_id] is not None
+            item_id in items and (items[item_id] is not None or items[item_id] == -1)
         ) or item_id in thread_blacklist:
             pbar.update(1)
             continue
         url = base_url + f"thread/{urllib.parse.quote(str(item_id))}"
-        pbar.set_description(f"get id {item_id}")
+        description = f"get id {item_id} prev {prev_id}"
+        pbar.set_description(description)
         soup = bypassRead(url)
         item = {}
         item["id"] = item_id
@@ -327,16 +330,16 @@ for item_id in key_list:
                 except Exception as e:
                     pass
 
-            def write_item(item):
+            def write_item(item_id, item):
                 global num_lines
                 with open(json_threads_filename, "a", encoding="utf-8") as f:
                     f.write(json.dumps(item) + "\n")
                     items[item_id] = num_lines
                     num_lines += 1
 
-            write_thread = Thread(target=write_item, args=(item,))
+            write_thread = Thread(target=write_item, args=(item_id, item,))
             write_thread.start()
-
+            prev_id = item_id
             pbar.update(1)
     except KeyboardInterrupt as e:
         print("Stopped by keyboard interrupt")
@@ -346,6 +349,12 @@ for item_id in key_list:
         print(f"item_id = {item_id}")
         logging.exception(e)
         break
+    finally:
+        if write_thread:
+            try:
+                write_thread.join()
+            except Exception as e:
+                logging.exception(e)
 
 save_file_json(f"{board}-items.json", items)
 save_file_json(f"{board}-images.json", thread_images)
