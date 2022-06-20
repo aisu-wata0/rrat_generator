@@ -4,14 +4,13 @@ from gpt_local_settings import *
 
 from typing import List, Union
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import pipeline
 
 model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=cache_dir)
 # print(model.eval())
 
 tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
 tokenizer.pad_token_id = tokenizer.eos_token_id
-
-from transformers import pipeline
 
 sentiment_pipeline = pipeline("sentiment-analysis")
 

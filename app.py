@@ -1,13 +1,15 @@
 # %%
 import logging
-import traceback
-from flask import Flask, request, jsonify, make_response, Response
+from flask import Flask, request, jsonify, make_response
 from markupsafe import escape
-from queue import Queue, Empty
+from queue import Queue
+import threading
+
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
-requests_queue = Queue()
+from consume_requests import requests_queue, stop_event, consume_requests
 
 
 def _build_cors_prelight_response():
@@ -28,12 +30,6 @@ def index():
     return "get completions on GET /completions"
 
 
-@app.route("/completions", methods=["GET"])
-def completions():
-    json = request.json
-    return json
-
-
 @app.route("/complete", methods=["POST", "OPTIONS"])
 def complete():
     if request.method == "OPTIONS":  # CORS preflight
@@ -46,17 +42,7 @@ def complete():
 
             response_queue = Queue()
 
-            requests_queue.put(
-                (
-                    {
-                        "context": content["context"],
-                        "top_p": float(content["top_p"]),
-                        "top_k": float(content["top_k"]),
-                        "temperature": float(content["temperature"]),
-                    },
-                    response_queue,
-                )
-            )
+            requests_queue.put((content, response_queue))
 
             return _corsify_actual_response(jsonify({**response_queue.get()}))
     else:
@@ -67,89 +53,29 @@ def complete():
 
 # %%
 
+
+thread_consume_requests = threading.Thread(target=consume_requests)
+thread_consume_requests.start()
+
 if __name__ == "__main__":
-    import threading
-    import time
+    kwargs_app = {"port": 5000, "host": "0.0.0.0"}
+    thread_app = threading.Thread(target=app.run, kwargs=kwargs_app)
+    thread_app.start()
 
-    threading.Thread(target=app.run, kwargs={"port": 5000, "host": "0.0.0.0"}).start()
+    from discord_bot import discord_bot_run
 
-    start = time.time()
-    from gpt_local import get_completions, default_kwargs
+    thread_discord_bot = threading.Thread(target=discord_bot_run)
+    thread_discord_bot.start()
 
-    logging.info(f"Models initialized in {time.time() - start:.06}s")
 
-    total_batch = 1
+import signal
 
-    while True:
-        all_context = []
-        all_top_p = []
-        all_top_k = []
-        all_temperature = []
-        all_q = []
-        while len(all_context) < total_batch:
-            try:
-                o, q = requests_queue.get(block=False)
-                try:
-                    g = {
-                        "context": o["context"],
-                        "top_p": o["top_p"]
-                        if "top_p" in o
-                        else default_kwargs["top_p"],
-                        "top_k": o["top_k"]
-                        if "top_k" in o
-                        else default_kwargs["top_k"],
-                        "temperature": o["temperature"]
-                        if "temperature" in o
-                        else default_kwargs["temperature"],
-                        "max_length": o["max_length"]
-                        if "max_length" in o
-                        else default_kwargs["max_length"],
-                    }
-                    all_context.append(g["context"])
-                    all_top_p.append(g["top_p"])
-                    all_top_k.append(g["top_k"])
-                    all_temperature.append(g["temperature"])
-                    all_q.append(q)
-                except Exception as e:
-                    logging.exception(e)
-                    q.put(
-                        {
-                            "error": str(e),
-                            "request": o,
-                        }
-                    )
-                    continue
-            except Empty:
-                if len(all_context):
-                    break
-                else:
-                    time.sleep(1)
 
-        start = time.time()
-        while len(all_context) < total_batch:
-            all_context.append("whatever")
-            all_top_p.append(1)
-            all_top_k.append(1)
-            all_temperature.append(1)
+def signal_handler(sig, frame):
+    logging.info("Keyboard interrupt")
+    stop_event.set()
+    thread_consume_requests.join()
+    exit(0)
 
-        all_tokenized = []
-        all_length = []
 
-        logging.info(f"get_completions {all_context}")
-        output = get_completions(
-            all_context,
-            # TODO: check if this works
-            # top_p=all_top_p,
-            # top_k=all_top_k,
-            # temperature=all_temperature,
-        )
-
-        for o, s, q in zip(output["completion"], output["sentiment"], all_q):
-            q.put(
-                {
-                    "completion": o,
-                    "sentiment": s,
-                }
-            )
-
-        logging.info(f"completion done in {time.time() - start:06}s")
+signal.signal(signal.SIGINT, signal_handler)
