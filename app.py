@@ -7,6 +7,13 @@ import threading
 
 logging.basicConfig(level=logging.INFO)
 
+loggers = [
+    logging.getLogger(name).setLevel(logging.WARN)
+    for name in logging.root.manager.loggerDict
+    if name.startswith("discord")
+]
+
+
 app = Flask(__name__)
 
 from consume_requests import requests_queue, stop_event, consume_requests

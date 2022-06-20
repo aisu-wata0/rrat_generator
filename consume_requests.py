@@ -1,10 +1,11 @@
-
 import logging
 import traceback
 import threading
 import time
 import json
 from queue import Queue, Empty
+
+from gpt_local_settings import *
 
 requests_queue = Queue()
 stop_event = threading.Event()
@@ -56,7 +57,7 @@ def consume_requests():
                             {
                                 "error": str(e),
                                 "request": o,
-								"traceback": traceback.format_exc(),
+                                "traceback": traceback.format_exc(),
                             }
                         )
                         continue
@@ -103,6 +104,7 @@ def consume_requests():
                 # append done completions in jsonl file
                 g["completion"] = o
                 g["sentiment"] = s
+                g["model"] = model_name
                 with open("done.jsonl", "a") as f:
                     f.write(json.dumps(g) + "\n")
 

@@ -52,14 +52,22 @@ async def on_message(message):
         "paper",
         "scissors",
     ]
-    keyword = "!rrat"
+    keyword_complete = "!rrat"
+    help_string = 'example: `!rrat "context":"GPT will complete the text in the context field. The parameters can be adjusted", "max_length": 70, "top_p": 0.9, "top_k": 0, "temperature": 0.75`'
 
-    if message.content.startswith(keyword):
+    if message.content.startswith(keyword_complete):
         # react to message while preparing response
         await message.add_reaction("⌛")
-        parameters = message.content.split(keyword)[-1]
+        parameters = message.content.split(keyword_complete)[-1]
         try:
-            parameters = json.loads(parameters)
+            parameters.strip()
+            if not parameters.startswith("{"):
+                parameters = "{" + parameters + "}"
+
+            if '"context":' not in parameters:
+                parameters = '{"context": ' + parameters[1:]
+
+            parameters = json.loads(parameters, strict=False)
             if parameters:
                 if requests_queue.qsize() > 100:
                     return {"error": "queue full, try again later"}
@@ -83,6 +91,7 @@ async def on_message(message):
             await message.remove_reaction("⌛", client.user)
             await message.add_reaction("❌")
             await message.channel.send(str(e))
+            await message.channel.send(help_string)
             return
 
 
