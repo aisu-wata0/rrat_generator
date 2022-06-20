@@ -230,13 +230,18 @@ len(key_list)
 
 write_thread = None
 
-for item_id in tqdm(key_list, total=len(key_list), **tqdm_kwargs):
+pbar = tqdm(total=len(key_list), **tqdm_kwargs)
+
+for item_id in key_list:
     try:
+        item_id = int(item_id)
         if (
             item_id in items and items[item_id] is not None
         ) or item_id in thread_blacklist:
+            pbar.update(1)
             continue
         url = base_url + f"thread/{urllib.parse.quote(str(item_id))}"
+        pbar.set_description(f"get id {item_id}")
         soup = bypassRead(url)
         item = {}
         item["id"] = item_id
@@ -255,6 +260,7 @@ for item_id in tqdm(key_list, total=len(key_list), **tqdm_kwargs):
 
         if item["post_count"] == 1:
             items[item_id] = -1
+            pbar.update(1)
             continue
 
         posts = soup.find_all("article", class_="post")
@@ -291,12 +297,13 @@ for item_id in tqdm(key_list, total=len(key_list), **tqdm_kwargs):
                 if thumb:
                     md5 = thumb.get("data-md5")
                     post_extra["image"] = md5
-                    if md5 not in thread_images:
-                        image = post.find("a", class_="thread_image_link")
+                    if md5 and md5 not in thread_images:
                         thread_images[md5] = {
                             "thumb": thumb.get("src"),
-                            "image": image.get("href"),
                         }
+                        image = post.find("a", class_="thread_image_link")
+                        if image:
+                            thread_images[md5]["image"] = image.get("href")
 
                 post_title = post.find("h2", {"class": "post_title"})
                 if post_title and post_title.text:
@@ -322,13 +329,15 @@ for item_id in tqdm(key_list, total=len(key_list), **tqdm_kwargs):
 
             def write_item(item):
                 global num_lines
-                with open(json_threads_filename, "a") as f:
+                with open(json_threads_filename, "a", encoding="utf-8") as f:
                     f.write(json.dumps(item) + "\n")
                     items[item_id] = num_lines
                     num_lines += 1
 
             write_thread = Thread(target=write_item, args=(item,))
             write_thread.start()
+
+            pbar.update(1)
     except KeyboardInterrupt as e:
         print("Stopped by keyboard interrupt")
         break
