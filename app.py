@@ -1,7 +1,6 @@
 # %%
 import logging
 from flask import Flask, request, jsonify, make_response
-from markupsafe import escape
 from queue import Queue
 import threading
 
@@ -69,10 +68,10 @@ if __name__ == "__main__":
     thread_app = threading.Thread(target=app.run, kwargs=kwargs_app)
     thread_app.start()
 
-    from discord_bot import discord_bot_run
+from discord_bot import discord_bot_run
 
-    thread_discord_bot = threading.Thread(target=discord_bot_run)
-    thread_discord_bot.start()
+thread_discord_bot = threading.Thread(target=discord_bot_run)
+thread_discord_bot.start()
 
 
 import signal

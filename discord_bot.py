@@ -1,17 +1,22 @@
 # bot.py
+from logging import exception
 import os
 
 import discord
 from dotenv import load_dotenv
-from markupsafe import escape
 import json
 from queue import Queue
 
-from consume_requests import requests_queue, stop_event
+from consume_requests import requests_queue, stop_event, consume_requests
 
-load_dotenv("DISCORD.env")
-TOKEN = os.getenv("DISCORD_TOKEN")
-# GUILD = os.getenv('DISCORD_GUILD')
+keyword_complete = "!rrat"
+help_string = f"""example: `{keyword_complete} "context": "GPT will complete the text in the context field. The parameters can be adjusted", "max_length": 70, "top_p": 0.9, "top_k": 0, "temperature": 0.75`\nwill return with 🛑 when request queue is full"""
+keyword_help = "!rrat help"
+
+discord_env_filepath = "DISCORD.env"
+discord_token_var = "DISCORD_TOKEN"
+load_dotenv(discord_env_filepath)
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 client = discord.Client()
 
@@ -19,8 +24,6 @@ client = discord.Client()
 @client.event
 async def on_ready():
     for guild in client.guilds:
-        # if guild.name == GUILD:
-        #     break
         print(
             f"{client.user} is connected to the following guild:\n"
             f"{guild.name}(id: {guild.id})"
@@ -42,36 +45,35 @@ def to_thread(func: typing.Callable):
     return wrapper
 
 
+def parse_request_message_content(msg_content):
+    parameters = msg_content.split(keyword_complete)[-1]
+    parameters.strip()
+    if not parameters.startswith("{"):
+        parameters = "{" + parameters + "}"
+
+    if '"context":' not in parameters:
+        parameters = '{"context": ' + parameters[1:]
+    return json.loads(parameters, strict=False)
+
+
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
 
-    rock_p_s = [
-        "rock",
-        "paper",
-        "scissors",
-    ]
-    keyword_complete = "!rrat"
-    help_string = 'example: `!rrat "context":"GPT will complete the text in the context field. The parameters can be adjusted", "max_length": 70, "top_p": 0.9, "top_k": 0, "temperature": 0.75`'
+    if message.content.startswith(keyword_help):
+        await message.reply(help_string)
+        return
 
     if message.content.startswith(keyword_complete):
+        if requests_queue.qsize() > 100:
+            await message.add_reaction("🛑")
+            return
         # react to message while preparing response
         await message.add_reaction("⌛")
-        parameters = message.content.split(keyword_complete)[-1]
         try:
-            parameters.strip()
-            if not parameters.startswith("{"):
-                parameters = "{" + parameters + "}"
-
-            if '"context":' not in parameters:
-                parameters = '{"context": ' + parameters[1:]
-
-            parameters = json.loads(parameters, strict=False)
+            parameters = parse_request_message_content(message.content)
             if parameters:
-                if requests_queue.qsize() > 100:
-                    return {"error": "queue full, try again later"}
-
                 response_queue = Queue()
 
                 requests_queue.put((parameters, response_queue))
@@ -86,35 +88,35 @@ async def on_message(message):
                 await message.remove_reaction("⌛", client.user)
                 await message.add_reaction("✅")
                 # send response
-                await message.channel.send(response)
+                await message.reply(response, mention_author=False)
         except Exception as e:
             await message.remove_reaction("⌛", client.user)
             await message.add_reaction("❌")
-            await message.channel.send(str(e))
-            await message.channel.send(help_string)
-            return
+            await message.reply(str(e) + "\n" + help_string, mention_author=False)
+        return
 
 
 def discord_bot_run():
-    client.run(TOKEN)
+    if not DISCORD_TOKEN:
+        raise IOError(f"Missing discord token in env file, please define `{discord_token_var}` in the file {discord_env_filepath}")
+    client.run(DISCORD_TOKEN)
 
 
 if __name__ == "__main__":
     import threading
-    import multiprocessing
 
-    thread_discord_bot = threading.Thread(target=discord_bot_run)
-    thread_discord_bot.start()
-    # discord_bot_run()
+    thread_consume_requests = threading.Thread(target=consume_requests)
+    thread_consume_requests.start()
 
+    import signal
 
-# import signal
-
-
-# def signal_handler(sig, frame):
-#     global app_running
-#     stop_event.set()
-#     exit(0)
+    def signal_handler(sig, frame):
+        global app_running
+        stop_event.set()
+        thread_consume_requests.join()
+        exit(0)
 
 
-# signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    discord_bot_run()

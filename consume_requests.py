@@ -5,7 +5,8 @@ import time
 import json
 from queue import Queue, Empty
 
-from gpt_local_settings import *
+import gpt_local_settings
+from gpt_local import get_completions, default_kwargs
 
 requests_queue = Queue()
 stop_event = threading.Event()
@@ -14,7 +15,6 @@ stop_event = threading.Event()
 def consume_requests():
     try:
         start = time.time()
-        from gpt_local import get_completions, default_kwargs
 
         logging.info(f"Models initialized in {time.time() - start:.06}s")
 
@@ -104,9 +104,10 @@ def consume_requests():
                 # append done completions in jsonl file
                 g["completion"] = o
                 g["sentiment"] = s
-                g["model"] = model_name
-                with open("done.jsonl", "a") as f:
-                    f.write(json.dumps(g) + "\n")
+                g["model"] = gpt_local_settings.model_name
+                if gpt_local_settings.log_completions_filepath:
+                    with open(gpt_local_settings.log_completions_filepath, "a") as f:
+                        f.write(json.dumps(g) + "\n")
 
             logging.info(f"completion done in {time.time() - start:06}s")
     except KeyboardInterrupt:

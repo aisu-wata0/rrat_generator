@@ -1,0 +1,6 @@
+discord.py
+flask
+dotenv
+tqdm
+absl-py
+beautifulsoup4

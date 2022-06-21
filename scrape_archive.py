@@ -2,25 +2,21 @@
 
 import urllib.request
 import os
-import time
 import datetime
 import logging
 import shutil
-import math
 import re
 import pickle
 import json
-import itertools
 import urllib.request
-from click import echo
 import requests
 from bs4 import BeautifulSoup, NavigableString
 from urllib.error import HTTPError
 import urllib.parse
 from pathlib import Path
 from threading import Thread
-import traceback
 from tqdm import tqdm
+import traceback
 
 # %%
 
@@ -131,13 +127,14 @@ def bypassRead(address):
             raise HTTPError(address, code=404, msg=error_string, hdrs=None, fp=None)
         return html
     else:
-        raise Exception("Error while reading url")
+        raise Exception(f"Error {response.status_code} on {address}")
 
 
 import urllib
 
 board = "vt"
-base_url = f"https://archive.alice.al/{board}/"
+# ! choose some website to scrape
+base_url = f"https:///{board}/"
 thread_blacklist = set({1})
 # %%
 items = {}
@@ -292,6 +289,7 @@ for item_id in key_list:
         url = base_url + f"thread/{urllib.parse.quote(str(item_id))}"
         description = f"get id {item_id} prev {prev_id}"
         pbar.set_description(description)
+        pbar.refresh()
         soup = bypassRead(url)
         item = {}
         item["id"] = item_id
@@ -299,14 +297,17 @@ for item_id in key_list:
         subitem_count = soup.find_all(
             "div", {"title": "Post Count / File Count / Posters"}
         )
-        if subitem_count:
-            subitem_count_s = subitem_count[0].text[1:-1].split("/")
-            item["post_count"] = int(subitem_count_s[0].strip())
-            item["file_count"] = int(subitem_count_s[1].strip())
-            try:
-                item["poster_count"] = int(subitem_count_s[2].strip())
-            except ValueError:
-                item["poster_count"] = 0
+        if not subitem_count:
+            items[item_id] = -2
+            pbar.update(1)
+            continue
+        subitem_count_s = subitem_count[0].text[1:-1].split("/")
+        item["post_count"] = int(subitem_count_s[0].strip())
+        item["file_count"] = int(subitem_count_s[1].strip())
+        try:
+            item["poster_count"] = int(subitem_count_s[2].strip())
+        except ValueError:
+            item["poster_count"] = 0
 
         if item["post_count"] == 1:
             items[item_id] = -1
