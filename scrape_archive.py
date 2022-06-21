@@ -140,11 +140,39 @@ board = "vt"
 base_url = f"https://archive.alice.al/{board}/"
 thread_blacklist = set({1})
 # %%
-soup_cache = {}
 items = {}
 thread_images = {}
 
 # %%
+
+filepath = f"{board}-items.json"
+try:
+    with open(filepath, "rb") as f:
+        items = json.load(f)
+except FileNotFoundError:
+    logging.warning(
+        f"Cache file {filepath} not found, hopefully this is your first time running this script."
+    )
+except Exception as e:
+    logging.exception(e)
+
+
+filepath = f"{board}-images.json"
+try:
+    with open(filepath, "rb") as f:
+        thread_images = json.load(f)
+except FileNotFoundError:
+    logging.warning(
+        f"Cache file {filepath} not found, hopefully this is your first time running this script."
+    )
+except Exception as e:
+    logging.exception(e)
+
+
+items = {int(key): items[key] for key in sorted(items.keys(), key=int)}
+
+# %%
+
 break_when_no_new_items = True
 items_new = {}
 page_num = 1
@@ -153,12 +181,7 @@ try:
         url = base_url + f"page/{urllib.parse.quote(str(page_num))}"
         print("Getting... ", url)
 
-        soup = None
-        if page_num not in soup_cache:
-            soup = bypassRead(url)
-            soup_cache[page_num] = str(soup)
-        else:
-            soup = BeautifulSoup(soup_cache[page_num], "html.parser")
+        soup = bypassRead(url)
         class_str = "post_is_op"
         items_found = soup.find_all("article", class_=class_str)
         if not items_found:
@@ -168,9 +191,11 @@ try:
         new_items = 0
         for item in items_found:
             item_id = str(item.get("id"))
-            if item_id not in items:
+            if int(item_id) not in items:
                 new_items += 1
                 items_new[int(item_id)] = None
+
+        print(new_items, " new items")
 
         page_num += 1
         if break_when_no_new_items:
@@ -188,7 +213,29 @@ items = {**items_new, **items}
 
 print(len(items.keys()), " items total,", len(items_new.keys()), " new")
 
-save_file_json(f"items_{board}.json", items)
+items = {int(key): items[key] for key in sorted(items.keys(), key=int)}
+
+save_file_json(f"{board}-items.json", items)
+
+# %%
+json_threads_filename = f"{board}-threads.jsonl"
+
+synchronize_with_jsonl_file = False
+if synchronize_with_jsonl_file:
+
+    max_id = 0
+    with open(json_threads_filename, encoding="utf-8") as in_f:
+        for l_idx, line in enumerate(in_f):
+            item = json.loads(line)
+            items[int(item["id"])] = l_idx
+            max_id = max(max_id, int(item["id"]))
+
+    items = {
+        int(key): (-1 if int(key) < max_id and items[key] is None else items[key])
+        for key in sorted(items.keys(), key=int)
+    }
+
+    save_file_json(f"{board}-items.json", items)
 
 # %%
 
@@ -217,7 +264,6 @@ def text_with_newlines(elem):
     return text.strip()
 
 
-json_threads_filename = f"{board}-threads.jsonl"
 try:
     num_lines = sum(1 for line in open(json_threads_filename))
 except FileNotFoundError:
@@ -234,6 +280,7 @@ write_thread = None
 
 pbar = tqdm(total=len(key_list), **tqdm_kwargs)
 prev_id = 0
+
 for item_id in key_list:
     try:
         item_id = int(item_id)
@@ -337,7 +384,13 @@ for item_id in key_list:
                     items[item_id] = num_lines
                     num_lines += 1
 
-            write_thread = Thread(target=write_item, args=(item_id, item,))
+            write_thread = Thread(
+                target=write_item,
+                args=(
+                    item_id,
+                    item,
+                ),
+            )
             write_thread.start()
             prev_id = item_id
             pbar.update(1)
@@ -358,4 +411,5 @@ for item_id in key_list:
 
 save_file_json(f"{board}-items.json", items)
 save_file_json(f"{board}-images.json", thread_images)
+
 # %%
