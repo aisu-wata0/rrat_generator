@@ -1,10 +1,15 @@
 # %%
 
+import logging
+import time
+
 from gpt_local_settings import *
 
 from typing import List, Union
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from transformers import pipeline
+
+start = time.time()
 
 model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=cache_dir)
 # print(model.eval())
@@ -13,6 +18,8 @@ tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
 tokenizer.pad_token_id = tokenizer.eos_token_id
 
 sentiment_pipeline = pipeline("sentiment-analysis")
+
+logging.info(f"Models initialized in {time.time() - start:.06}s")
 
 # %%
 

@@ -14,10 +14,6 @@ stop_event = threading.Event()
 
 def consume_requests():
     try:
-        start = time.time()
-
-        logging.info(f"Models initialized in {time.time() - start:.06}s")
-
         total_batch = 1
         while not stop_event.is_set():
             all_g = []
