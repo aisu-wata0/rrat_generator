@@ -1,13 +1,26 @@
 # bot.py
+
 import logging
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
 import os
+from pathlib import Path
+import shutil
 
 import discord
 from dotenv import load_dotenv
 import json
+from json.decoder import JSONDecodeError
 from queue import Queue
 from threading import Thread
 import traceback
+
+if __name__ == "__main__":
+    loggers = [
+        logging.getLogger(name).setLevel(logging.WARN)
+        for name in logging.root.manager.loggerDict
+    ]
 
 from consume_requests import requests_queue, stop_event, consume_requests
 import gpt_local_settings
@@ -29,6 +42,9 @@ try:
         users_settings = json.load(f)
 except FileNotFoundError:
     pass
+except JSONDecodeError as e:
+    logging.warning(f"Unable to load user settings from file: {filepath}, JSONDecodeError")
+    shutil.copy(filepath, Path(filepath).with_suffix(".json.bak"))
 except Exception as e:
     logging.exception(e)
 
