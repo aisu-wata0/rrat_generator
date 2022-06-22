@@ -1,15 +1,14 @@
 # %%
 import logging
+logging.basicConfig(level=logging.INFO)
+
 from flask import Flask, request, jsonify, make_response
 from queue import Queue
 import threading
 
-logging.basicConfig(level=logging.INFO)
-
 loggers = [
     logging.getLogger(name).setLevel(logging.WARN)
     for name in logging.root.manager.loggerDict
-    if name.startswith("discord")
 ]
 
 
