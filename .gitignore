@@ -3,4 +3,5 @@
 *.jsonl
 *.json
 *.env
+*.bak
 bak/
