@@ -11,10 +11,18 @@ from transformers import pipeline
 
 start = time.time()
 
-model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=cache_dir)
+tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
+
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    bos_token_id=tokenizer.bos_token_id,
+    eos_token_id=tokenizer.eos_token_id,
+    pad_token_id=tokenizer.eos_token_id,
+    decoder_start_token_id=tokenizer.eos_token_id,
+    cache_dir=cache_dir,
+)
 # print(model.eval())
 
-tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
 tokenizer.pad_token_id = tokenizer.eos_token_id
 
 sentiment_pipeline = pipeline("sentiment-analysis")
@@ -24,7 +32,7 @@ logging.info(f"Models initialized in {time.time() - start:.06}s")
 # %%
 
 
-def generate(input_text: Union[str, List[str]], **kwargs):
+def generate(input_text: Union[str, List[str]], added_length=None, **kwargs):
     if isinstance(input_text, str):
         input_text = [input_text]
     input_tokenized = tokenizer(input_text, return_tensors="pt", padding=True)
@@ -33,15 +41,19 @@ def generate(input_text: Union[str, List[str]], **kwargs):
     kwargs_.update(kwargs)
     kwargs_.update(
         {
-            "pad_token_id": tokenizer.pad_token_id,
-            "eos_token_id": tokenizer.eos_token_id,
-            "bos_token_id": tokenizer.bos_token_id,
-            "decoder_start_token_id": tokenizer.eos_token_id,
+            # "pad_token_id": tokenizer.pad_token_id,
+            # "eos_token_id": tokenizer.eos_token_id,
+            # "bos_token_id": tokenizer.bos_token_id,
+            # "decoder_start_token_id": tokenizer.eos_token_id,
             "attention_mask": input_tokenized["attention_mask"],
         }
     )
-    # input_tokenized = input_tokenized.cuda()
-    output = model.generate(input_tokenized["input_ids"], **kwargs_)
+    if added_length:
+        kwargs_["max_length"] = input_tokenized["input_ids"].shape[-1] + added_length
+
+    output = model.generate(
+        input_tokenized["input_ids"], **kwargs_, return_dict_in_generate=False
+    )
     output_text = [tokenizer.decode(o, skip_special_tokens=True) for o in output]
     return output_text
 
@@ -54,8 +66,10 @@ def get_completions(input_text: Union[str, List[str]], **kwargs):
     }
 
 
+# %%
 if __name__ == "__main__":
     import json
+
     try:
         from message_templates import *
     except:

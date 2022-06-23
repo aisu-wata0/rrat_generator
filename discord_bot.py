@@ -181,7 +181,7 @@ async def on_message(message):
                 @to_thread
                 def blocking_func():
                     return response_queue.get()
-                
+
                 out = await blocking_func()
 
                 response = str(json.dumps(out, indent=2))[2:-2]
@@ -194,14 +194,12 @@ async def on_message(message):
                 # send response
                 await message.reply(response, mention_author=False)
         except Exception as e:
+            logging.exception(e)
             await message.remove_reaction("⌛", client.user)
             await message.add_reaction("❌")
             e_name = type(e).__name__
             error_msg = "" if e_name in str(e) else (e_name + ": ")
-            error_msg += (
-                str(e) + help_string
-            )
-            logging.exception(e)
+            error_msg += str(e) + help_string
             await message.reply(error_msg, mention_author=False)
         return
 

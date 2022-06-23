@@ -18,6 +18,12 @@ from threading import Thread
 from tqdm import tqdm
 import traceback
 
+
+# %%
+max_backups = 3
+backup_dir = "bak"
+get_new_threads = False
+
 # %%
 
 # aesthetic customization of the progressbar
@@ -30,11 +36,6 @@ tqdm_kwargs = {
     "mininterval": 1 / 60,
     "maxinterval": 1 / 24,
 }
-
-
-# %%
-max_backups = 3
-backup_dir = "bak"
 
 
 def removeOldFiles(list_of_files, max_files):
@@ -170,49 +171,49 @@ items = {int(key): items[key] for key in sorted(items.keys(), key=int)}
 
 # %%
 
-break_when_no_new_items = True
-items_new = {}
-page_num = 1
-try:
-    while True:
-        url = base_url + f"page/{urllib.parse.quote(str(page_num))}"
-        print("Getting... ", url)
+if get_new_threads:
+    break_when_no_new_items = True
+    items_new = {}
+    page_num = 1
+    try:
+        while True:
+            url = base_url + f"page/{urllib.parse.quote(str(page_num))}"
+            print("Getting... ", url)
 
-        soup = bypassRead(url)
-        class_str = "post_is_op"
-        items_found = soup.find_all("article", class_=class_str)
-        if not items_found:
-            print("No items found, breaking from loop")
-            break
-        print("Got ", len(items_found), " items")
-        new_items = 0
-        for item in items_found:
-            item_id = str(item.get("id"))
-            if int(item_id) not in items:
-                new_items += 1
-                items_new[int(item_id)] = None
-
-        print(new_items, " new items")
-
-        page_num += 1
-        if break_when_no_new_items:
-            if not new_items:
+            soup = bypassRead(url)
+            class_str = "post_is_op"
+            items_found = soup.find_all("article", class_=class_str)
+            if not items_found:
+                print("No items found, breaking from loop")
                 break
+            print("Got ", len(items_found), " items")
+            new_items = 0
+            for item in items_found:
+                item_id = str(item.get("id"))
+                if int(item_id) not in items:
+                    new_items += 1
+                    items_new[int(item_id)] = None
 
-except KeyboardInterrupt as e:
-    print("Stopped by keyboard interrupt")
-except Exception as e:
-    print("Caught exception")
-    logging.exception(e)
+            print(new_items, " new items")
 
+            page_num += 1
+            if break_when_no_new_items:
+                if not new_items:
+                    break
 
-items = {**items_new, **items}
+    except KeyboardInterrupt as e:
+        print("Stopped by keyboard interrupt")
+    except Exception as e:
+        print("Caught exception")
+        logging.exception(e)
 
-print(len(items.keys()), " items total,", len(items_new.keys()), " new")
+    items = {**items_new, **items}
 
-items = {int(key): items[key] for key in sorted(items.keys(), key=int)}
+    print(len(items.keys()), " items total,", len(items_new.keys()), " new")
 
-save_file_json(f"{board}-items.json", items)
+    items = {int(key): items[key] for key in sorted(items.keys(), key=int)}
+
+    save_file_json(f"{board}-items.json", items)
 
 # %%
 json_threads_filename = f"{board}-threads.jsonl"
@@ -261,10 +262,14 @@ def text_with_newlines(elem):
     return text.strip()
 
 
-try:
-    num_lines = sum(1 for line in open(json_threads_filename))
-except FileNotFoundError:
-    num_lines = 0
+# try:
+#     num_lines = sum(1 for line in open(json_threads_filename))
+# except FileNotFoundError:
+#     num_lines = 0
+num_lines = 0
+for key in sorted(items.keys(), key=int, reverse=True):
+    if items[key] is not None and items[key] > 0:
+        num_lines = int(items[key]) + 1
 
 print(f"{num_lines} lines in file {json_threads_filename}")
 
