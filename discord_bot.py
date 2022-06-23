@@ -109,13 +109,11 @@ def parse_message_parameters(msg_content, keyword, has_context):
 
         if has_context:
             if not parameters.startswith('{"context":'):
-                parameters = '{"context": ' + parameters[1:]
-                if (
-                    not keyword
-                    and not parameters.startswith('{"context": "')
-                    and not parameters.endswith('"}')
-                ):
-                    parameters = '{"context": """' + parameters[1:-1] + '"""}'
+                parameters = '{"context":' + parameters[1:]
+                if not parameters.startswith(
+                    '{"context":"'
+                ) and not parameters.endswith('"}'):
+                    parameters = '{"context":"""' + parameters[len('{"context":'):-1] + '"""}'
     return ast.literal_eval(parameters)
 
 
