@@ -1,6 +1,8 @@
 # bot.py
 
 import logging
+from operator import is_
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
@@ -15,6 +17,8 @@ from json.decoder import JSONDecodeError
 from queue import Queue
 from threading import Thread
 import traceback
+import ast
+import re
 
 if __name__ == "__main__":
     loggers = [
@@ -26,8 +30,8 @@ from consume_requests import requests_queue, stop_event, consume_requests
 import gpt_local_settings
 
 keyword_complete = "!rrat "
-keyword_help = "!rrat help "
-keyword_settings = "!rrat set "
+keyword_help = "!rrat_help "
+keyword_settings = "!rrat_set "
 help_string = f"""example: `{keyword_complete} "context": "GPT will complete the text in the context field. The parameters can be adjusted", "max_length": 70, "top_p": 0.9, "top_k": 0, "temperature": 0.75`\nwill return with 🛑 when request queue is full"""
 
 discord_env_filepath = "DISCORD.env"
@@ -43,7 +47,9 @@ try:
 except FileNotFoundError:
     pass
 except JSONDecodeError as e:
-    logging.warning(f"Unable to load user settings from file: {filepath}, JSONDecodeError")
+    logging.warning(
+        f"Unable to load user settings from file: {filepath}, JSONDecodeError"
+    )
     shutil.copy(filepath, Path(filepath).with_suffix(".json.bak"))
 except Exception as e:
     logging.exception(e)
@@ -77,7 +83,10 @@ def to_thread(func: typing.Callable):
 
 
 def parameters_user(parameters, message_author_id):
-    return {**users_settings[message_author_id], **parameters}
+    params = {}
+    if message_author_id in users_settings:
+        params = users_settings[message_author_id]
+    return {**params, **parameters}
 
 
 def parse_settings(parameters):
@@ -98,10 +107,16 @@ def parse_message_parameters(msg_content, keyword, has_context):
     if not parameters.startswith("{"):
         parameters = "{" + parameters + "}"
 
-    if has_context:
-        if '"context":' not in parameters:
-            parameters = '{"context": ' + parameters[1:]
-    return json.loads(parameters, strict=False)
+        if has_context:
+            if not parameters.startswith('{"context":'):
+                parameters = '{"context": ' + parameters[1:]
+                if (
+                    not keyword
+                    and not parameters.startswith('{"context": "')
+                    and not parameters.endswith('"}')
+                ):
+                    parameters = '{"context": """' + parameters[1:-1] + '"""}'
+    return ast.literal_eval(parameters)
 
 
 @client.event
@@ -142,7 +157,12 @@ async def on_message(message):
             await message.reply(str(e) + "\n" + help_string, mention_author=False)
         return
 
+    keyw = ""
+    is_dm = not message.guild
     if message.content.startswith(keyword_complete):
+        keyw = keyword_complete
+    should_complete = keyw or is_dm
+    if should_complete:
         if requests_queue.qsize() > 100:
             await message.add_reaction("🛑")
             return
@@ -150,7 +170,7 @@ async def on_message(message):
         await message.add_reaction("⌛")
         try:
             parameters = parse_message_parameters(
-                message.content, keyword_complete, has_context=True
+                message.content, keyw, has_context=True
             )
             parameters = parameters_user(parameters, message.author.id)
             if parameters:
@@ -161,18 +181,28 @@ async def on_message(message):
                 @to_thread
                 def blocking_func():
                     return response_queue.get()
+                
+                out = await blocking_func()
 
-                response = str(json.dumps(await blocking_func(), indent=2))
-
+                response = str(json.dumps(out, indent=2))[2:-2]
+                if not keyw:
+                    if out["completion"]:
+                        # response = out["completion"][len(parameters["context"]):]
+                        response = out["completion"]
                 # remove reaction
                 await message.remove_reaction("⌛", client.user)
-                await message.add_reaction("✅")
                 # send response
                 await message.reply(response, mention_author=False)
         except Exception as e:
             await message.remove_reaction("⌛", client.user)
             await message.add_reaction("❌")
-            await message.reply(str(e) + "\n" + help_string, mention_author=False)
+            e_name = type(e).__name__
+            error_msg = "" if e_name in str(e) else (e_name + ": ")
+            error_msg += (
+                str(e) + help_string
+            )
+            logging.exception(e)
+            await message.reply(error_msg, mention_author=False)
         return
 
 
