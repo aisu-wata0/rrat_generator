@@ -32,7 +32,7 @@ import gpt_local_settings
 keyword_complete = "!rrat "
 keyword_help = "!rrat_help "
 keyword_settings = "!rrat_set "
-help_string = f"""example: `{keyword_complete} "context": "GPT will complete the text in the context field. The parameters can be adjusted", "max_length": 70, "top_p": 0.9, "top_k": 0, "temperature": 0.75`\nwill return with 🛑 when request queue is full"""
+help_string = f"""examples: \n{keyword_complete} Text to be completed\n`{keyword_complete} "context": "\""Complete the text in the context field. The parameters can be adjusted"\"", "max_length": 70, "top_p": 0.9, "top_k": 0, "temperature": 0.75`\nYou can change the settings for all your next queries (each user has his), example:\n`{keyword_settings} "max_length": 70, "top_p": 0.9, "top_k": 0, "temperature": 0.75`\nwill react with 🛑 if the request queue is full"""
 
 discord_env_filepath = "DISCORD.env"
 discord_token_var = "DISCORD_TOKEN"
